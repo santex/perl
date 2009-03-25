@@ -16633,6 +16633,11 @@ int main(int argc, char *argv[])
         exit(2);	
     }
 
+    if (Version >= 4001000) {
+        printf("DB 4.1.0 or greater not supported by DB_File included with this Perl.\nTry installing from CPAN instead.\n") ;
+        exit(2);
+    }
+
     exit(0);
 #else
 #if defined(_DB_H_) && defined(BTREEMAGIC) && defined(HASHMAGIC)
