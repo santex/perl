@@ -11,8 +11,8 @@ our $VERSION = 0.001;
 
 fieldhash my %MESSAGE;    # string or coderef 'promise'
 fieldhash my %CONTEXT;    # arbitrary user data
-fieldhash my %TRACE;      # trace with CORE::GLOBAL::caller
-fieldhash my %RAW_TRACE;  # trace with CORE::caller
+fieldhash my %CALL_STACK; # stack with CORE::GLOBAL::caller
+fieldhash my %RAW_CALL_STACK;  # stack with CORE::caller
 
 use overload (
   q{""} => 'message',
@@ -24,9 +24,9 @@ use overload (
 # to be an facade over an existing exception class
 #
 # XXX real code should do something smarter about $_[1] being undef
-sub context   { return $CONTEXT{    ref($_[0]) ? $_[0] : $_[1] }  }
-sub trace     { return $TRACE{      ref($_[0]) ? $_[0] : $_[1] }  }
-sub raw_trace { return $RAW_TRACE{  ref($_[0]) ? $_[0] : $_[1] }  }
+sub context         { return $CONTEXT{        ref($_[0]) ? $_[0] : $_[1] } }
+sub call_stack      { return $CALL_STACK{     ref($_[0]) ? $_[0] : $_[1] } }
+sub raw_call_stack  { return $RAW_CALL_STACK{ ref($_[0]) ? $_[0] : $_[1] } }
 
 # If message is coderef, invoke it to generate stringified form.
 # This allows stringification based on context (or stack trace)
@@ -63,30 +63,30 @@ sub new {
     $MESSAGE{ $self } = $message;
   }
 
-  # raw trace is based only on CORE::caller
+  # raw call_stack is based only on CORE::caller
   {
-    my @raw_trace;
-    my $i = 1 + $options->{uplevel}; # skip our own frame or more 
+    my @raw_call_stack;
+    my $i = 1 + $options->{uplevel}; # skip our own frame or more
     while (my @frame = CORE::caller($i++)) {
-      push @raw_trace, \@frame;
+      push @raw_call_stack, \@frame;
     }
-    $RAW_TRACE{ $self } = \@raw_trace;
+    $RAW_CALL_STACK{ $self } = \@raw_call_stack;
   }
 
-  # trace is subject to CORE::GLOBAL::caller overrides
+  # call_stack is subject to CORE::GLOBAL::caller overrides
   {
     no warnings 'once';
     if ( defined *CORE::GLOBAL::caller ) {
       no strict 'refs';
-      my @trace;
-      my $i = 1 + $options->{uplevel}; # skip our own frame or more 
+      my @call_stack;
+      my $i = 1 + $options->{uplevel}; # skip our own frame or more
       while (my @frame = &{"CORE::GLOBAL::caller"}($i++)) {
-        push @trace, \@frame;
+        push @call_stack, \@frame;
       }
-      $TRACE{ $self } = \@trace;
+      $CALL_STACK{ $self } = \@call_stack;
     }
     else {
-      $TRACE{ $self } = $RAW_TRACE{ $self };
+      $CALL_STACK{ $self } = $RAW_CALL_STACK{ $self };
     }
   }
 
@@ -112,6 +112,16 @@ sub _create_facade {
 sub throw { die $_[0]->new( $_[1], $_[2], { uplevel => 1 } ) }
 
 1;
+
+## TODO
+#
+# needs croak/confess to print to stderr and die
+#
+# needs string/trace to get default message (without dying)
+#
+# can we do without facades and just register the foreign objects
+# directly?  means you can't call $obj->message -- you *have* to
+# go through error->message($obj)
 
 __END__
 
