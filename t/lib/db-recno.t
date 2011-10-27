@@ -522,7 +522,7 @@ EOM
     ok(86, $x eq "abc\ndef\nghi\njkl\n") ;
 
     # $# sets array to same length
-    ok(87, $self = tie @h, 'DB_File', $Dfile, O_RDWR, 0640, $DB_RECNO ) ;
+    ok(87, $self = tie @h, 'DB_File', $Dfile, O_RDWR|O_CREAT, 0640, $DB_RECNO ) ;
     if ($FA)
       { $#h = 3 }
     else 
@@ -534,7 +534,7 @@ EOM
     ok(90, $x eq "abc\ndef\nghi\njkl\n") ;
 
     # $# sets array to bigger
-    ok(91, $self = tie @h, 'DB_File', $Dfile, O_RDWR, 0640, $DB_RECNO ) ;
+    ok(91, $self = tie @h, 'DB_File', $Dfile, O_RDWR|O_CREAT, 0640, $DB_RECNO ) ;
     if ($FA)
       { $#h = 6 }
     else 
@@ -546,7 +546,7 @@ EOM
     ok(94, $x eq "abc\ndef\nghi\njkl\n\n\n\n") ;
 
     # $# sets array smaller
-    ok(95, $self = tie @h, 'DB_File', $Dfile, O_RDWR, 0640, $DB_RECNO ) ;
+    ok(95, $self = tie @h, 'DB_File', $Dfile, O_RDWR|O_CREAT, 0640, $DB_RECNO ) ;
     if ($FA)
       { $#h = 2 }
     else 
