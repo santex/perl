@@ -6839,16 +6839,29 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
     register CV *compcv = PL_compcv;
     SV *const_sv;
     SV *namesv;
+    PADOFFSET pax = o->op_targ;
+    CV *outcv = CvOUTSIDE(PL_compcv);
 
     PERL_ARGS_ASSERT_NEWMYSUB;
 
-    /* PL_comppad is the pad owned by the new sub.  We need to look in
-       CvOUTSIDE and find the pad belonging to the enclosing sub, where we
-       store the new one. */
-    namesv =
-	AvARRAY(AvARRAY(CvPADLIST(CvOUTSIDE(PL_compcv)))[0])[o->op_targ];
+
+    /* Find the pad slot for storing the new sub.
+       We cannot use PL_comppad, as it is the pad owned by the new sub.  We
+       need to look in CvOUTSIDE and find the pad belonging to the enclos-
+       ing sub.  And then we need to dig deeper if this is a lexical from
+       outside, as in:
+	   my sub foo; sub { sub foo { } }
+     */
+   redo:
+    namesv = AvARRAY(AvARRAY(CvPADLIST(outcv))[0])[pax];
+    if (SvFAKE(namesv) && PARENT_PAD_INDEX(namesv)) {
+	pax = PARENT_PAD_INDEX(namesv);
+	outcv = CvOUTSIDE(outcv);
+	assert(outcv);
+	goto redo;
+    }
     svspot =
-	&AvARRAY(AvARRAY(CvPADLIST(CvOUTSIDE(PL_compcv)))[1])[o->op_targ];
+	&AvARRAY(AvARRAY(CvPADLIST(outcv))[1])[pax];
     spot = (CV **)svspot;
 
     if (proto) {
@@ -6987,8 +7000,12 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	PL_compcv = NULL;
 	goto done;
     }
-    SvREFCNT_dec(CvOUTSIDE(compcv));
-    CvWEAKOUTSIDE_on(compcv);
+    if (outcv == CvOUTSIDE(compcv)) { 
+	assert(!CvWEAKOUTSIDE(compcv));
+	SvREFCNT_dec(CvOUTSIDE(compcv));
+	CvWEAKOUTSIDE_on(compcv);
+    }
+    /* XXX else do we have a circular reference? */
     if (cv) {	/* must reuse cv in case stub is referenced elsewhere */
 	/* transfer PL_compcv to cv */
 	if (block
@@ -6999,7 +7016,8 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	    cv_flags_t existing_builtin_attrs = CvFLAGS(cv) & CVf_BUILTIN_ATTRS;
 	    AV *const temp_av = CvPADLIST(cv);
 	    CV *const temp_cv = CvOUTSIDE(cv);
-	    const cv_flags_t slabbed = CvSLABBED(cv);
+	    const cv_flags_t other_flags =
+		CvFLAGS(cv) & (CVf_SLABBED|CVf_WEAKOUTSIDE);
 	    OP * const cvstart = CvSTART(cv);
 
 	    assert(CvWEAKOUTSIDE(cv));
@@ -7016,8 +7034,8 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	    CvPADLIST(compcv) = temp_av;
 	    CvSTART(cv) = CvSTART(compcv);
 	    CvSTART(compcv) = cvstart;
-	    if (slabbed) CvSLABBED_on(compcv);
-	    else CvSLABBED_off(compcv);
+	    CvFLAGS(compcv) &= ~(CVf_SLABBED|CVf_WEAKOUTSIDE);
+	    CvFLAGS(compcv) |= other_flags;
 
 	    if (CvFILE(cv) && CvDYNFILE(cv)) {
 		Safefree(CvFILE(cv));
